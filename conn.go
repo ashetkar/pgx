@@ -40,7 +40,8 @@ type ConnConfig struct {
 
 	createdByParseConfig bool // Used to enforce created by ParseConfig rule.
 
-	loadBalance bool
+	loadBalance  bool
+	topologyKeys string
 }
 
 // Copy returns a deep copy of the config that is safe to use and modify.
@@ -191,12 +192,23 @@ func ParseConfig(connString string) (*ConnConfig, error) {
 
 	loadBalance := true
 	if s, ok := config.RuntimeParams["load_balance"]; ok {
-		log.Println("load balance property found!")
+		log.Println("load balance property found! Value: " + s)
 		delete(config.RuntimeParams, "load_balance")
 		if b, err := strconv.ParseBool(s); err == nil {
-			preferSimpleProtocol = b
+			loadBalance = b
 		} else {
 			return nil, fmt.Errorf("invalid load_balance: %v", err)
+		}
+	}
+
+	topologyKeys := ""
+	if s, ok := config.RuntimeParams["topology_keys"]; ok {
+		log.Println("topology_keys property found! Value: " + s)
+		delete(config.RuntimeParams, "topology_keys")
+		if err := validateTopologyKeys(s); err == nil {
+			topologyKeys = s
+		} else {
+			return nil, fmt.Errorf("invalid topology_keys: %v", err)
 		}
 	}
 
@@ -208,6 +220,7 @@ func ParseConfig(connString string) (*ConnConfig, error) {
 		PreferSimpleProtocol: preferSimpleProtocol,
 		connString:           connString,
 		loadBalance:          loadBalance,
+		topologyKeys:         topologyKeys,
 	}
 
 	return connConfig, nil
