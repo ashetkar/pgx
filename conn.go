@@ -12,7 +12,7 @@ import (
 	"github.com/jackc/pgconn/stmtcache"
 	"github.com/jackc/pgproto3/v2"
 	"github.com/jackc/pgtype"
-	"github.com/jackc/pgx/v4/internal/sanitize"
+	"github.com/yugabyte/pgx/v4/internal/sanitize"
 )
 
 // ConnConfig contains all the options used to establish a connection. It must be created by ParseConfig and
@@ -81,6 +81,7 @@ type Conn struct {
 	wbuf             []byte
 	preallocatedRows []connRows
 	eqb              extendedQueryBuilder
+	cliUpdated       bool
 }
 
 // Identifier a PostgreSQL identifier or name. Identifiers can be composed of
@@ -299,6 +300,10 @@ func connect(ctx context.Context, config *ConnConfig) (c *Conn, err error) {
 // connection.
 func (c *Conn) Close(ctx context.Context) error {
 	if c.IsClosed() {
+		if !c.cliUpdated && c.config.loadBalance {
+			c.cliUpdated = true
+			decrementConnCount(c.config.controlHost + "," + c.config.Host)
+		}
 		return nil
 	}
 
@@ -307,7 +312,8 @@ func (c *Conn) Close(ctx context.Context) error {
 		c.log(ctx, LogLevelInfo, "closed connection", nil)
 	}
 
-	if c.config.loadBalance {
+	if !c.cliUpdated && c.config.loadBalance {
+		c.cliUpdated = true
 		decrementConnCount(c.config.controlHost + "," + c.config.Host)
 	}
 	return err
